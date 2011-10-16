@@ -298,12 +298,10 @@ class cPDFParser:
                 break
 
     def acceptVisitor(self, callback):
-        while True:
+        object = self.GetObject()
+        while object != None:
+            callback(object)
             object = self.GetObject()
-            if object != None:
-                callback(object)
-            else:
-                break
 
 class cPDFElementComment:
     def __init__(self, comment):
@@ -800,10 +798,8 @@ def Main():
             oStats = cPdfStats()
             oPDFParser.acceptVisitor(oStats.visitPdfObject)
             oStats.printStats()
-
-        while True:
-            object = oPDFParser.GetObject()
-            if object != None:
+        else:
+            def visit(object):
                 if object.type == PDF_ELEMENT_COMMENT and selectComment:
                     print 'PDF Comment %s' % FormatOutput(object.comment, options.raw)
                     print
@@ -851,8 +847,10 @@ def Main():
                         fExtract.close()
                     except:
                         print 'Error writing file %s' % options.extract
-            else:
-                break
+
+            oPDFParser.acceptVisitor(visit)
+
+
 
 class cPdfStats(object):
     def __init__(self):
