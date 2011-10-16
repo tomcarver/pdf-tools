@@ -341,11 +341,11 @@ class cPDFElementIndirectObject:
                 return content[i+1][1]
         return ''
 
-    def GetReferences(self):
+    def GetReferences(self, type = ''):
         content = CopyWithoutWhiteSpace(self.content)
         references = []
         for i in range(0, len(content)):
-            if i > 1 and content[i][0] == CHAR_REGULAR and content[i][1] == 'R' and content[i-2][0] == CHAR_REGULAR and IsNumeric(content[i-2][1]) and content[i-1][0] == CHAR_REGULAR and IsNumeric(content[i-1][1]):
+            if i > 1 and content[i][0] == CHAR_REGULAR and content[i][1] == 'R' and content[i-2][0] == CHAR_REGULAR and IsNumeric(content[i-2][1]) and content[i-1][0] == CHAR_REGULAR and IsNumeric(content[i-1][1]) and (type == '' or content[i-3][1] == type):
                 references.append((content[i-2][1], content[i-1][1], content[i][1]))
         return references
 
@@ -533,11 +533,14 @@ class cPDFParseDictionary:
 def FormatOutput(data, raw):
     if raw:
         if type(data) == type([]):
-            return ''.join(map(lambda x: x[1], data))
+            return FormatTokensAsRaw(data)
         else:
             return data
     else:
         return repr(data)
+
+def FormatTokensAsRaw(tokens):
+    return ''.join(map(lambda token: token[1], tokens))
 
 def PrintObject(object, options):
     print 'obj %d %d' % (object.id, object.version)
