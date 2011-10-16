@@ -297,6 +297,14 @@ class cPDFParser:
             else:
                 break
 
+    def acceptVisitor(self, callback):
+        while True:
+            object = self.GetObject()
+            if object != None:
+                callback(object)
+            else:
+                break
+
 class cPDFElementComment:
     def __init__(self, comment):
         self.type = PDF_ELEMENT_COMMENT
@@ -754,12 +762,6 @@ def Main():
 
     else:
         oPDFParser = cPDFParser(args[0], options.verbose, options.extract)
-        cntComment = 0
-        cntXref = 0
-        cntTrailer = 0
-        cntStartXref = 0
-        cntIndirectObject = 0
-        dicObjectTypes = {}
 
         selectComment = False
         selectXref = False
@@ -794,86 +796,102 @@ def Main():
         else:
             optionsType = options.type
 
+        if options.stats:
+            oStats = cPdfStats()
+            oPDFParser.acceptVisitor(oStats.visitPdfObject)
+            oStats.printStats()
+
         while True:
             object = oPDFParser.GetObject()
             if object != None:
-                if options.stats:
-                    if object.type == PDF_ELEMENT_COMMENT:
-                        cntComment += 1
-                    elif object.type == PDF_ELEMENT_XREF:
-                        cntXref += 1
-                    elif object.type == PDF_ELEMENT_TRAILER:
-                        cntTrailer += 1
-                    elif object.type == PDF_ELEMENT_STARTXREF:
-                        cntStartXref += 1
-                    elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
-                        cntIndirectObject += 1
-                        type = object.GetType()
-                        if not type in dicObjectTypes:
-                            dicObjectTypes[type] = [object.id]
-                        else:
-                            dicObjectTypes[type].append(object.id)
-                else:
-                    if object.type == PDF_ELEMENT_COMMENT and selectComment:
-                        print 'PDF Comment %s' % FormatOutput(object.comment, options.raw)
-                        print
-                    elif object.type == PDF_ELEMENT_XREF and selectXref:
-                        print 'xref %s' % FormatOutput(object.content, options.raw)
-                        print
-                    elif object.type == PDF_ELEMENT_TRAILER and selectTrailer:
-                        oPDFParseDictionary = cPDFParseDictionary(object.content[1:], options.nocanonicalizedoutput)
-                        if oPDFParseDictionary == None:
-                            print 'trailer %s' % FormatOutput(object.content, options.raw)
-                        else:
-                            print 'trailer'
-                            oPDFParseDictionary.PrettyPrint(' ')
-                        print
-                    elif object.type == PDF_ELEMENT_STARTXREF and selectStartXref:
-                        print 'startxref %d' % object.index
-                        print
-                    elif object.type == PDF_ELEMENT_INDIRECT_OBJECT and selectIndirectObject:
-                        if options.search:
-                            if object.Contains(options.search):
-                                PrintObject(object, options)
-                        elif options.object:
-                            if object.id == eval(options.object):
-                                PrintObject(object, options)
-                        elif options.reference:
-                            if object.References(options.reference):
-                                PrintObject(object, options)
-                        elif options.type:
-                            if EqualCanonical(object.GetType(), optionsType):
-                                PrintObject(object, options)
-                        elif options.hash:
-                            print 'obj %d %d' % (object.id, object.version)
-                            rawContent = FormatOutput(object.content, True)
-                            print ' len: %d md5: %s' % (len(rawContent), hashlib.md5(rawContent).hexdigest())
-                            print
-                        else:
+                if object.type == PDF_ELEMENT_COMMENT and selectComment:
+                    print 'PDF Comment %s' % FormatOutput(object.comment, options.raw)
+                    print
+                elif object.type == PDF_ELEMENT_XREF and selectXref:
+                    print 'xref %s' % FormatOutput(object.content, options.raw)
+                    print
+                elif object.type == PDF_ELEMENT_TRAILER and selectTrailer:
+                    oPDFParseDictionary = cPDFParseDictionary(object.content[1:], options.nocanonicalizedoutput)
+                    if oPDFParseDictionary == None:
+                        print 'trailer %s' % FormatOutput(object.content, options.raw)
+                    else:
+                        print 'trailer'
+                        oPDFParseDictionary.PrettyPrint(' ')
+                    print
+                elif object.type == PDF_ELEMENT_STARTXREF and selectStartXref:
+                    print 'startxref %d' % object.index
+                    print
+                elif object.type == PDF_ELEMENT_INDIRECT_OBJECT and selectIndirectObject:
+                    if options.search:
+                        if object.Contains(options.search):
                             PrintObject(object, options)
-                    elif object.type == PDF_ELEMENT_MALFORMED:
+                    elif options.object:
+                        if object.id == eval(options.object):
+                            PrintObject(object, options)
+                    elif options.reference:
+                        if object.References(options.reference):
+                            PrintObject(object, options)
+                    elif options.type:
+                        if EqualCanonical(object.GetType(), optionsType):
+                            PrintObject(object, options)
+                    elif options.hash:
+                        print 'obj %d %d' % (object.id, object.version)
+                        rawContent = FormatOutput(object.content, True)
+                        print ' len: %d md5: %s' % (len(rawContent), hashlib.md5(rawContent).hexdigest())
+                        print
+                    else:
+                        PrintObject(object, options)
+                elif object.type == PDF_ELEMENT_MALFORMED:
+                    try:
+                        fExtract = open(options.extract, 'wb')
                         try:
-                            fExtract = open(options.extract, 'wb')
-                            try:
-                                fExtract.write(object.content)
-                            except:
-                                print 'Error writing file %s' % options.extract
-                            fExtract.close()
+                            fExtract.write(object.content)
                         except:
                             print 'Error writing file %s' % options.extract
+                        fExtract.close()
+                    except:
+                        print 'Error writing file %s' % options.extract
             else:
                 break
 
-        if options.stats:
-            print 'Comment: %s' % cntComment
-            print 'XREF: %s' % cntXref
-            print 'Trailer: %s' % cntTrailer
-            print 'StartXref: %s' % cntStartXref
-            print 'Indirect object: %s' % cntIndirectObject
-            names = dicObjectTypes.keys()
-            names.sort()
-            for key in names:
-                print ' %s %d: %s' % (key, len(dicObjectTypes[key]), ', '.join(map(lambda x: '%d' % x, dicObjectTypes[key])))
+class cPdfStats(object):
+    def __init__(self):
+        self.cntComment = 0
+        self.cntXref = 0
+        self.cntTrailer = 0
+        self.cntStartXref = 0
+        self.cntIndirectObject = 0
+        self.dicObjectTypes = {}
+
+    def visitPdfObject(self, object):
+        if object.type == PDF_ELEMENT_COMMENT:
+            self.cntComment += 1
+        elif object.type == PDF_ELEMENT_XREF:
+            self.cntXref += 1
+        elif object.type == PDF_ELEMENT_TRAILER:
+            self.cntTrailer += 1
+        elif object.type == PDF_ELEMENT_STARTXREF:
+            self.cntStartXref += 1
+        elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
+            self.cntIndirectObject += 1
+            type = object.GetType()
+            if not type in self.dicObjectTypes:
+                self.dicObjectTypes[type] = [object.id]
+            else:
+                self.dicObjectTypes[type].append(object.id)
+
+    def printStats(self):
+        print 'Comment: %s' % self.cntComment
+        print 'XREF: %s' % self.cntXref
+        print 'Trailer: %s' % self.cntTrailer
+        print 'StartXref: %s' % self.cntStartXref
+        print 'Indirect object: %s' % self.cntIndirectObject
+        names = self.dicObjectTypes.keys()
+        names.sort()
+        for key in names:
+            print ' %s %d: %s' % (key, len(self.dicObjectTypes[key]), ', '.join(map(lambda x: '%d' % x, self.dicObjectTypes[key])))
+
+
 
 def TestPythonVersion(enforceMaximumVersion=False, enforceMinimumVersion=False):
     if sys.version_info[0:3] > __maximum_python_version__:
